@@ -17,87 +17,112 @@ const circuitLineMarginR = 50;
 const gridDimenY = 3; // Number of rows in the grid (qubits)
 const gridDimenX = 10; // Number of columns in the grid
 
-export default ({ droppingItem }) => {
-    const [layout, setLayout] = React.useState([]); /* Layout of the circuit as 
-    an array of objects, each representing a gate with properties:
-        i - unique id
-        gateId - the ID of the gate corresponding to the operator from operators.js
-        x - x position in the grid (column)
-        y - y position in the grid (row or qubit)
-        w - width (number of columns it occupies, usually 1)
-        h - height of the gate (range of qubits it occupies)
-    */
-    const [droppingItemHeight, setDroppingItemHeight] = React.useState(1); // Height of the dropping item, used to adjust the placeholder height during drag-and-drop of a new gate
-    const [draggedItemId, setDraggedItemId] = React.useState(null); // ID of the item being dragged, used to handle drag-and-drop events of existing gates
+export default function CircuitCanvas({ droppingItem }) {
+    const [layout, setLayout] = React.useState([]);
+    const [droppingItemHeight, setDroppingItemHeight] = React.useState(1);
+    const [draggedItemId, setDraggedItemId] = React.useState(null);
 
-    // Set the dropping item height for placeholder based on the height described in the operators array
     useEffect(() => {
-        if (!droppingItem) {
-            return;
-        }
-        setDroppingItemHeight(operators.find(op => op.id === droppingItem)?.height ?? 1);
+        if (!droppingItem) return;
+        const op = operators.find(op => op.id === droppingItem);
+        setDroppingItemHeight(op?.height ?? 1);
     }, [droppingItem]);
 
-    // Update the layout
+    //  Dynamically calculate width of dropping item
+    const droppingItemWidth = React.useMemo(() => {
+        if (!droppingItem) return 1;
+        const op = operators.find(op => op.id === droppingItem);
+        if (!op) return 1;
+        if (op.components?.length > 0) {
+            const minX = Math.min(...op.components.map(c => c.x));
+            const maxX = Math.max(...op.components.map(c => c.x));
+            return maxX - minX + 1;
+        }
+        return 1;
+    }, [droppingItem]);
+
     const handleCircuitChange = (newCircuit) => {
         setLayout(newCircuit.layout);
     };
 
-    // Handle dropping a new gate onto the circuit
     const onDrop = (newLayout, layoutItem, event) => {
-        event.preventDefault();
+      event.preventDefault();
 
-        let gateId = event.dataTransfer.getData('gateId');
-        const isCustomGate = event.dataTransfer.getData('isCustomGate') === 'true';
-        const height = operators.find(op => op.id === gateId)?.height || 1;
+      let gateId = event.dataTransfer.getData("gateId");
+      const operator = operators.find((op) => op.id === gateId);
+      if (!operator) return;
 
-        if (layoutItem.y + height > gridDimenY) {
-            return; // Prevent dropping if the gate exceeds the grid height
+      const height = operator.height || 1;
+      const width = (() => {
+        if (operator.components?.length) {
+          const minX = Math.min(...operator.components.map((c) => c.x));
+          const maxX = Math.max(...operator.components.map((c) => c.x));
+          return maxX - minX + 1;
         }
-        
-        const newItem = {
-            i: new Date().getTime().toString(), // unique id
-            gateId: gateId,
-            x: layoutItem.x,
-            y: layoutItem.y,
-            w: 1,
-            h: height,
-            isResizable: false,
-        };
-        const updatedLayout = newLayout.filter(
-            item => item.i !== '__dropping-elem__' && item.y < gridDimenY,
-        ).map(item => {
-            return {
-                ...item,
-                gateId: layout.find(i => i.i === item.i)?.gateId,
-            };
-        });
-        updatedLayout.push(newItem);
+        return 1;
+      })();
 
-        handleCircuitChange({
-            layout: updatedLayout,
-        });
+      const x = layoutItem.x;
+      const y = layoutItem.y;
 
-        return;
+      //  Prevent placing outside grid width
+      if (x + width > gridDimenX || y + height > gridDimenY) return;
+
+      // Calculate occupied cells for the new gate
+      const newCells = [];
+      for (let dx = 0; dx < width; dx++) {
+        for (let dy = 0; dy < height; dy++) {
+          newCells.push(`${x + dx}-${y + dy}`);
+        }
+      }
+
+      //  Check for overlap with existing items
+      const existingCells = new Set();
+      layout.forEach((item) => {
+        const w = item.w || 1;
+        const h = item.h || 1;
+        for (let dx = 0; dx < w; dx++) {
+          for (let dy = 0; dy < h; dy++) {
+            existingCells.add(`${item.x + dx}-${item.y + dy}`);
+          }
+        }
+      });
+
+      const hasOverlap = newCells.some((cell) => existingCells.has(cell));
+      if (hasOverlap) return; // Cancel drop if overlap
+
+      const newItem = {
+        i: new Date().getTime().toString(),
+        gateId,
+        x,
+        y,
+        w: width,
+        h: height,
+        isResizable: false,
+      };
+
+      const updatedLayout = newLayout
+        .filter((item) => item.i !== "__dropping-elem__" && item.y < gridDimenY)
+        .map((item) => ({
+          ...item,
+          gateId: layout.find((i) => i.i === item.i)?.gateId,
+        }));
+
+      updatedLayout.push(newItem);
+      handleCircuitChange({ layout: updatedLayout });
     };
-
-    // Update the layout when a gate is dragged and dropped
     const handleDragStop = (newLayout) => {
-        if (!draggedItemId) {
-            console.error('Dragged item ID is missing on drag stop!');
-            return;
-        }
+        if (!draggedItemId) return;
         const updatedLayout = newLayout.filter(
-            item => item.i !== '__dropping-elem__' && item.y < gridDimenY,
-        ).map(item => {
-            return {
-                ...item,
-                gateId: layout.find(i => i.i === item.i)?.gateId,
-            };
-        });
+            item => item.i !== '__dropping-elem__' && item.y < gridDimenY
+        ).map(item => ({
+            ...item,
+            gateId: layout.find(i => i.i === item.i)?.gateId,
+        }));
+
         setLayout(updatedLayout);
         setDraggedItemId(null);
-    }
+    };
 
     return (
         <div className='relative bg-white border-2 border-gray-200 m-2 shadow-lg rounded-lg'
@@ -106,7 +131,7 @@ export default ({ droppingItem }) => {
                 padding: `${circuitContainerPadding.y}px ${circuitContainerPadding.x}px`,
                 minWidth: `${2 * containerPadding.x + gridDimenX * (size + margin.x)}px`,
                 width: `${2 * containerPadding.x + (gridDimenX) * (size + margin.x) + size / 2 + margin.x}px`,
-                height: `${2 * containerPadding.y + (gridDimenY) * (size + margin.y) - margin.y}px`, // +1 to account for classical bit
+                height: `${2 * containerPadding.y + (gridDimenY) * (size + margin.y) - margin.y}px`,
                 overflow: 'hidden',
             }}
         >
@@ -121,30 +146,22 @@ export default ({ droppingItem }) => {
                 droppingItem={{
                     i: '__dropping-elem__',
                     h: droppingItemHeight,
-                    w: 1,
+                    w: droppingItemWidth, // ✅ Use dynamic width
                 }}
                 isBounded={false}
                 isDroppable={true}
                 margin={[margin.x, margin.y]}
                 onDrag={() => {
-                    const placeholderEl = document.querySelector(
-                        '.react-grid-placeholder',
-                    );
+                    const placeholderEl = document.querySelector('.react-grid-placeholder');
                     if (placeholderEl) {
-                        placeholderEl.style.backgroundColor =
-                            'rgba(235, 53, 53, 0.2)';
+                        placeholderEl.style.backgroundColor = 'rgba(235, 53, 53, 0.2)';
                         placeholderEl.style.border = '2px dashed blue';
                     }
                 }}
                 onDragStart={(layout, oldItem) => {
                     const draggedItemId = oldItem?.i;
-                    if (!draggedItemId) {
-                        console.error('Dragged item ID is missing!');
-                        return;
-                    }
-                    setDraggedItemId(prev => {
-                        return draggedItemId;
-                    });
+                    if (!draggedItemId) return;
+                    setDraggedItemId(draggedItemId);
                 }}
                 onDragStop={(layout, oldItem, newItem) => {
                     handleDragStop(layout);
@@ -159,17 +176,11 @@ export default ({ droppingItem }) => {
                     marginLeft: `${circuitLineMarginL}px`,
                     marginRight: `${circuitLineMarginR}px`,
                 }}
-                width={
-                    gridDimenX *
-                    (size + margin.x)
-                }
+                width={gridDimenX * (size + margin.x)}
             >
-                {layout?.map((item, index) => {
+                {layout?.map((item) => {
                     const gate = operators.find(op => op.id === item.gateId);
-                    if (!gate) {
-                        console.warn(`Gate with ID ${item.gateId} not found in operators.`);
-                        return null;
-                    }
+                    if (!gate) return null;
                     return (
                         <div
                             className="grid-item relative group"
@@ -189,6 +200,7 @@ export default ({ droppingItem }) => {
                     );
                 })}
             </ReactGridLayout>
+
             <div className="absolute top-0 left-0 z-10"
                 style={{
                     width: `${2 * containerPadding.x + (gridDimenX) * (size + margin.x) + size / 2}px`,
@@ -216,7 +228,6 @@ export default ({ droppingItem }) => {
                     </div>
                 ))}
             </div>
-
         </div>
     );
 }
