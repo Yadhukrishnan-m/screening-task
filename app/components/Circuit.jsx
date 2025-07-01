@@ -21,11 +21,13 @@ export default function CircuitCanvas({ droppingItem }) {
     const [layout, setLayout] = React.useState([]);
     const [droppingItemHeight, setDroppingItemHeight] = React.useState(1);
     const [draggedItemId, setDraggedItemId] = React.useState(null);
+      
 
     useEffect(() => {
         if (!droppingItem) return;
         const op = operators.find(op => op.id === droppingItem);
         setDroppingItemHeight(op?.height ?? 1);
+        
     }, [droppingItem]);
 
     //  Dynamically calculate width of dropping item
@@ -45,9 +47,47 @@ export default function CircuitCanvas({ droppingItem }) {
         setLayout(newCircuit.layout);
     };
 
+
+    function shiftLayoutForWideGate(layout, newGateX, newGateWidth, gridWidth) {
+      const newColumns = new Set();
+      for (let i = newGateX; i < newGateX + newGateWidth; i++) {
+        newColumns.add(i);
+      }
+
+      return layout.map((item) => {
+        // Ignore placeholder
+        if (item.i === "__dropping-elem__") return item;
+
+        // Check if it overlaps new gate's columns
+        const itemColumns = new Set();
+        for (let i = item.x; i < item.x + item.w; i++) {
+          itemColumns.add(i);
+        }
+
+        const overlap = [...newColumns].some((c) => itemColumns.has(c));
+
+        if (overlap) {
+          // Compute safe shift amount to clear both widths
+          let shiftAmount = Math.max(newGateWidth, item.w);
+
+          let tryRight = item.x + shiftAmount;
+          let tryLeft = item.x - shiftAmount;
+
+          if (tryRight + item.w <= gridWidth) {
+            return { ...item, x: tryRight };
+          } else if (tryLeft >= 0) {
+            return { ...item, x: tryLeft };
+          } else {
+            return null;
+          }
+        }
+        return item;
+      });
+    }
+   
+
     const onDrop = (newLayout, layoutItem, event) => {
       event.preventDefault();
-
       let gateId = event.dataTransfer.getData("gateId");
       const operator = operators.find((op) => op.id === gateId);
       if (!operator) return;
@@ -65,32 +105,18 @@ export default function CircuitCanvas({ droppingItem }) {
       const x = layoutItem.x;
       const y = layoutItem.y;
 
-      //  Prevent placing outside grid width
+      // Prevent placing outside grid
       if (x + width > gridDimenX || y + height > gridDimenY) return;
 
-      // Calculate occupied cells for the new gate
-      const newCells = [];
-      for (let dx = 0; dx < width; dx++) {
-        for (let dy = 0; dy < height; dy++) {
-          newCells.push(`${x + dx}-${y + dy}`);
-        }
-      }
+      // Shift existing items to make room
+      const shiftedLayout = shiftLayoutForWideGate(
+        layout,
+        x,
+        width,
+        gridDimenX
+      );
 
-      //  Check for overlap with existing items
-      const existingCells = new Set();
-      layout.forEach((item) => {
-        const w = item.w || 1;
-        const h = item.h || 1;
-        for (let dx = 0; dx < w; dx++) {
-          for (let dy = 0; dy < h; dy++) {
-            existingCells.add(`${item.x + dx}-${item.y + dy}`);
-          }
-        }
-      });
-
-      const hasOverlap = newCells.some((cell) => existingCells.has(cell));
-      if (hasOverlap) return; // Cancel drop if overlap
-
+      // Add new gate
       const newItem = {
         i: new Date().getTime().toString(),
         gateId,
@@ -100,30 +126,52 @@ export default function CircuitCanvas({ droppingItem }) {
         h: height,
         isResizable: false,
       };
-
-      const updatedLayout = newLayout
-        .filter((item) => item.i !== "__dropping-elem__" && item.y < gridDimenY)
-        .map((item) => ({
-          ...item,
-          gateId: layout.find((i) => i.i === item.i)?.gateId,
-        }));
-
-      updatedLayout.push(newItem);
+      const updatedLayout = [...shiftedLayout, newItem];
       handleCircuitChange({ layout: updatedLayout });
     };
+      
+
+    function mergeLayoutWithGateIds(newLayout, oldLayout) {
+      return newLayout.map((item) => {
+        const existing = oldLayout.find((i) => i.i === item.i);
+        return {
+          ...item,
+          gateId: existing?.gateId,
+        };
+      });
+    }
+      
     const handleDragStop = (newLayout) => {
-        if (!draggedItemId) return;
-        const updatedLayout = newLayout.filter(
-            item => item.i !== '__dropping-elem__' && item.y < gridDimenY
-        ).map(item => ({
-            ...item,
-            gateId: layout.find(i => i.i === item.i)?.gateId,
-        }));
+      if (!draggedItemId) return;
 
-        setLayout(updatedLayout);
-        setDraggedItemId(null);
+      // Merge back gateIds
+      const mergedLayout = mergeLayoutWithGateIds(newLayout, layout);
+      
+      // Find the moved gate
+      const movedItem = mergedLayout.find((item) => item.i === draggedItemId);
+      if (!movedItem) return;
+
+      const movedWidth = movedItem.w || 1;
+      const movedX = movedItem.x;
+
+      // Shift others if they overlap the new columns
+      const others = mergedLayout.filter((item) => item.i !== movedItem.i);
+
+      const shiftedOthers = shiftLayoutForWideGate(
+        others,
+        movedX,
+        movedWidth,
+        gridDimenX
+      );
+
+      // Combine back
+      const updatedLayout = [...shiftedOthers, movedItem];
+
+      setLayout(updatedLayout);
+      setDraggedItemId(null);
     };
-
+      
+      
     return (
         <div className='relative bg-white border-2 border-gray-200 m-2 shadow-lg rounded-lg'
             style={{
@@ -146,7 +194,7 @@ export default function CircuitCanvas({ droppingItem }) {
                 droppingItem={{
                     i: '__dropping-elem__',
                     h: droppingItemHeight,
-                    w: droppingItemWidth, // ✅ Use dynamic width
+                    w: droppingItemWidth, //  Use dynamic width
                 }}
                 isBounded={false}
                 isDroppable={true}

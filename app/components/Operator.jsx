@@ -5,7 +5,7 @@ import { margin, operators, size } from '../data/operators.jsx';
 import { Eye } from 'lucide-react';
 
 export default function Operator({ title, itemId, fill, height, width, components, isCustom, symbol, style = {} }) {
-    const [isXRayMode, setIsXRayMode] = useState(false); // X-ray mode to show all components of a custom gate
+    const [isXRayMode, setIsXRayMode] = useState(false);
     const findOperator = (id) => operators.find((op) => op.id === id);
     return (
       <div style={{ ...style }} className="group relative">
@@ -49,6 +49,8 @@ export default function Operator({ title, itemId, fill, height, width, component
           {isXRayMode &&
             components.map((comp, idx) => {
               const compOp = findOperator(comp.gateId);
+               
+              
               if (!compOp) return null;
 
               // Position each component inside the grid
