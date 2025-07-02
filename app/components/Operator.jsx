@@ -1,12 +1,25 @@
-'use client';
+  'use client';
 
-import React, { useState } from 'react';
-import { margin, operators, size } from '../data/operators.jsx';
-import { Eye } from 'lucide-react';
+  import React, { useState } from 'react';
+  import { margin, operators, size } from '../data/operators.jsx';
+  import { Eye } from 'lucide-react';
 
-export default function Operator({ title, itemId, fill, height, width, components, isCustom, symbol, style = {} }) {
-    const [isXRayMode, setIsXRayMode] = useState(false);
+  export default function Operator({
+    title,
+    itemId,
+    fill,
+    height,
+    width,
+    components,
+    isCustom,
+    symbol,
+    style = {},
+    xRayGateId,
+    setXRayGateId,
+  }) {
+    // const [isXRayMode, setIsXRayMode] = useState(false);
     const findOperator = (id) => operators.find((op) => op.id === id);
+    const isXRayMode = xRayGateId === itemId;
     return (
       <div style={{ ...style }} className="group relative">
         <svg
@@ -49,8 +62,7 @@ export default function Operator({ title, itemId, fill, height, width, component
           {isXRayMode &&
             components.map((comp, idx) => {
               const compOp = findOperator(comp.gateId);
-               
-              
+
               if (!compOp) return null;
 
               // Position each component inside the grid
@@ -80,7 +92,6 @@ export default function Operator({ title, itemId, fill, height, width, component
                 </g>
               );
             })}
-         
         </svg>
         {isCustom && (
           <button
@@ -90,7 +101,7 @@ export default function Operator({ title, itemId, fill, height, width, component
             } relative top-0 left-0 bg-white cursor-pointer border border-gray-300 z-50 rounded-full shadow -translate-1/2`}
             onClick={(e) => {
               e.stopPropagation();
-              setIsXRayMode(!isXRayMode);
+              setXRayGateId(isXRayMode ? null : itemId);
             }}
             style={{
               width: 18,
@@ -109,4 +120,4 @@ export default function Operator({ title, itemId, fill, height, width, component
         )}
       </div>
     );
-}
+  }
