@@ -43,7 +43,7 @@
 
     useEffect(() => {
       if (!xRayGateId) {
-        // Reset to default widths when X-Ray mode is off
+       
         setLayout((prevLayout) =>
           prevLayout.map((item) => ({
             ...item,
@@ -210,7 +210,7 @@
         }
       }
 
-      // Add new gate (no shifting unless CG is expanded)
+      // Add new gate 
       const newItem = {
         i: new Date().getTime().toString(),
         gateId,
@@ -234,7 +234,6 @@
       });
     }
 
-    // CHANGE 4: Enhance handleDragStop to handle edge cases
     const handleDragStop = (newLayout) => {
       if (!draggedItemId) return;
 
@@ -304,7 +303,7 @@
         }
       }
 
-      // Update layout without shifting (allow collisions unless CG is expanded)
+      // Update layout without shifting
       const updatedLayout = [
         ...mergedLayout.filter((item) => item.i !== movedItem.i),
         { ...movedItem, x: movedX, w: movedWidth },
