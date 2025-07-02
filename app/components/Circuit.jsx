@@ -263,7 +263,7 @@
         movedX = gridDimenX - movedWidth;
       }
 
-      // Check for conflicts with CG gate in X-Ray mode (if not dragging the CG gate)
+      // Check for conflicts with CG gate in X-Ray mode 
       const xRayItem =
         xRayGateId && xRayGateId !== movedItem.i
           ? layout.find((item) => item.i === xRayGateId)
